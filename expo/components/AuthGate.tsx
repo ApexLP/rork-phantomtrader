@@ -1,28 +1,36 @@
-import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
-import { LogIn, ShieldCheck, TrendingUp } from 'lucide-react-native';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LogIn, ShieldCheck, TrendingUp, ArrowRight, X } from 'lucide-react-native';
 import { useAuth, type BackendUser } from '@/contexts/AuthContext';
 import { colors } from '@/constants/colors';
 import { OnboardingScreen } from '@/components/OnboardingScreen';
+import { TutorialPromptScreen } from '@/components/TutorialPromptScreen';
+import { TutorialContent } from '@/components/TutorialContent';
 
 const APP_ICON = require('../assets/images/icon.png');
+
+const TUTORIAL_SHOWN_PREFIX = 'tutorial_prompt_shown_v1_';
 
 interface AuthGateProps {
   children: React.ReactNode;
 }
 
+type TutorialStage = 'unknown' | 'prompt' | 'tour' | 'done';
+
 export function AuthGate({ children }: AuthGateProps) {
-  const { isAuthenticated, isLoading, isAuthenticating, login, error, backendUser } = useAuth();
+  const { isAuthenticated, isLoading, isAuthenticating, login, error, backendUser, user } = useAuth();
   const [logoFailed, setLogoFailed] = useState<boolean>(false);
   const [localOnboardingDone, setLocalOnboardingDone] = useState<boolean>(false);
+  const [tutorialStage, setTutorialStage] = useState<TutorialStage>('unknown');
+
+  const userKey = user?.sub ?? backendUser?.sub ?? null;
 
   const needsOnboarding = useMemo(() => {
     if (!isAuthenticated || !backendUser) return false;
     if (localOnboardingDone) return false;
     const bu = backendUser as BackendUser & {
       onboarding_completed?: boolean;
-      marketing_opt_in?: boolean | null;
-      marketing_opt_in_at?: string | null;
     };
     if (bu.onboarding_completed === true) return false;
     return true;
@@ -31,8 +39,61 @@ export function AuthGate({ children }: AuthGateProps) {
   useEffect(() => {
     if (!isAuthenticated) {
       setLocalOnboardingDone(false);
+      setTutorialStage('unknown');
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (needsOnboarding) return;
+    if (!userKey) return;
+    if (tutorialStage !== 'unknown') return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const val = await AsyncStorage.getItem(TUTORIAL_SHOWN_PREFIX + userKey);
+        if (cancelled) return;
+        if (val === '1') {
+          setTutorialStage('done');
+        } else {
+          setTutorialStage('prompt');
+        }
+      } catch (e) {
+        console.log('[AuthGate] tutorial flag read failed', e);
+        if (!cancelled) setTutorialStage('prompt');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, needsOnboarding, userKey, tutorialStage]);
+
+  const markTutorialPromptShown = useCallback(async () => {
+    if (!userKey) return;
+    try {
+      await AsyncStorage.setItem(TUTORIAL_SHOWN_PREFIX + userKey, '1');
+    } catch (e) {
+      console.log('[AuthGate] tutorial flag write failed', e);
+    }
+  }, [userKey]);
+
+  const onPromptAccept = useCallback(() => {
+    console.log('[AuthGate] Tutorial accepted');
+    markTutorialPromptShown();
+    setTutorialStage('tour');
+  }, [markTutorialPromptShown]);
+
+  const onPromptSkip = useCallback(() => {
+    console.log('[AuthGate] Tutorial skipped');
+    markTutorialPromptShown();
+    setTutorialStage('done');
+  }, [markTutorialPromptShown]);
+
+  const onTourFinish = useCallback(() => {
+    console.log('[AuthGate] Tutorial tour finished');
+    setTutorialStage('done');
+  }, []);
 
   if (isAuthenticated) {
     if (needsOnboarding) {
@@ -45,6 +106,41 @@ export function AuthGate({ children }: AuthGateProps) {
         />
       );
     }
+
+    if (tutorialStage === 'prompt') {
+      return <TutorialPromptScreen onAccept={onPromptAccept} onSkip={onPromptSkip} />;
+    }
+
+    if (tutorialStage === 'tour') {
+      return (
+        <View style={styles.tourContainer} testID="tutorial-tour">
+          <View style={styles.tourTopBar}>
+            <Text style={styles.tourTitle}>App Tutorial</Text>
+            <TouchableOpacity
+              onPress={onTourFinish}
+              style={styles.tourClose}
+              activeOpacity={0.7}
+              testID="tutorial-tour-close"
+            >
+              <X size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+          <TutorialContent />
+          <View style={styles.tourFooter}>
+            <TouchableOpacity
+              style={styles.tourFinishBtn}
+              onPress={onTourFinish}
+              activeOpacity={0.85}
+              testID="tutorial-tour-finish"
+            >
+              <Text style={styles.tourFinishText}>Get started</Text>
+              <ArrowRight size={18} color={colors.background} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
     return <>{children}</>;
   }
 
@@ -209,5 +305,59 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 12,
+  },
+  tourContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingTop: Platform.OS === 'web' ? 24 : 56,
+  },
+  tourTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  tourTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: colors.text,
+    letterSpacing: 0.3,
+  },
+  tourClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tourFooter: {
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'web' ? 20 : 34,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  tourFinishBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingVertical: 15,
+    borderRadius: 14,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  tourFinishText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: '700' as const,
+    letterSpacing: 0.3,
   },
 });

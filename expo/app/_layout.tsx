@@ -89,6 +89,13 @@ function RootLayoutNav() {
           headerBackTitle: 'Back to Politicians',
         }} 
       />
+      <Stack.Screen 
+        name="tutorial" 
+        options={{ 
+          title: 'App Tutorial',
+          presentation: 'modal',
+        }} 
+      />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

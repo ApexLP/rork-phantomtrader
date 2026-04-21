@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronRight, FileText, Shield, Scale, Brain, Mail, ExternalLink, LogOut, User as UserIcon } from 'lucide-react-native';
+import { ChevronRight, FileText, Shield, Scale, Brain, Mail, ExternalLink, LogOut, User as UserIcon, BookOpen, Briefcase, TrendingUp, Clock, Landmark, Trophy } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
 import { useCallback } from 'react';
 import { useAuth, getUserFirstName, getUserId } from '@/contexts/AuthContext';
@@ -10,6 +10,27 @@ interface LegalItemProps {
   title: string;
   subtitle: string;
   onPress: () => void;
+}
+
+interface TutorialStepProps {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  tint: string;
+}
+
+function TutorialStep({ icon, title, body, tint }: TutorialStepProps) {
+  return (
+    <View style={styles.tutorialStep}>
+      <View style={[styles.tutorialStepIcon, { backgroundColor: tint + '18', borderColor: tint + '40' }]}>
+        {icon}
+      </View>
+      <View style={styles.tutorialStepBody}>
+        <Text style={styles.tutorialStepTitle}>{title}</Text>
+        <Text style={styles.tutorialStepText}>{body}</Text>
+      </View>
+    </View>
+  );
 }
 
 function LegalItem({ icon, title, subtitle, onPress }: LegalItemProps) {
@@ -88,6 +109,60 @@ export default function SettingsScreen() {
         <Text style={styles.brandTagline}>Simulation & Education Platform</Text>
         <View style={styles.disclaimerBadge}>
           <Text style={styles.disclaimerText}>No real money trading • For educational purposes only</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Getting Started</Text>
+        <View style={styles.tutorialCard}>
+          <View style={styles.tutorialHeader}>
+            <View style={styles.tutorialIconWrap}>
+              <BookOpen size={18} color={colors.primary} />
+            </View>
+            <View style={styles.tutorialHeaderText}>
+              <Text style={styles.tutorialTitle}>App Tutorial</Text>
+              <Text style={styles.tutorialSubtitle}>A quick tour of what PhantomTrader can do</Text>
+            </View>
+          </View>
+
+          <View style={styles.tutorialSteps}>
+            <TutorialStep
+              icon={<Briefcase size={16} color="#00E5FF" />}
+              title="Portfolios"
+              body="Create simulated portfolios and practice trading with virtual cash."
+              tint="#00E5FF"
+            />
+            <TutorialStep
+              icon={<TrendingUp size={16} color="#4FC3F7" />}
+              title="Market"
+              body="Browse live stocks, search tickers, and buy or sell inside your active portfolio."
+              tint="#4FC3F7"
+            />
+            <TutorialStep
+              icon={<Clock size={16} color="#FFB84D" />}
+              title="History"
+              body="Review every trade across all portfolios and track your performance over time."
+              tint="#FFB84D"
+            />
+            <TutorialStep
+              icon={<Landmark size={16} color="#CE93D8" />}
+              title="Politicians"
+              body="Follow disclosed trades by U.S. politicians and spot patterns in their activity."
+              tint="#CE93D8"
+            />
+            <TutorialStep
+              icon={<Trophy size={16} color="#FFD54F" />}
+              title="Compete"
+              body="Join leaderboards, create groups, and see who is performing best."
+              tint="#FFD54F"
+            />
+          </View>
+
+          <View style={styles.tutorialDisclaimer}>
+            <Text style={styles.tutorialDisclaimerText}>
+              All trading is virtual. PhantomTrader is an educational simulator and no real money is involved.
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -327,5 +402,85 @@ const styles = StyleSheet.create({
   footerVersion: {
     fontSize: 12,
     color: colors.textMuted,
+  },
+  tutorialCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+  },
+  tutorialHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  tutorialIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primary + '18',
+    borderWidth: 1,
+    borderColor: colors.primary + '40',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tutorialHeaderText: {
+    flex: 1,
+  },
+  tutorialTitle: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  tutorialSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  tutorialSteps: {
+    gap: 10,
+  },
+  tutorialStep: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  tutorialStepIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  tutorialStepBody: {
+    flex: 1,
+  },
+  tutorialStepTitle: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  tutorialStepText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  tutorialDisclaimer: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  tutorialDisclaimerText: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.textMuted,
+    fontStyle: 'italic' as const,
   },
 });
