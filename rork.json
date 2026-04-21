@@ -1,0 +1,9 @@
+{
+  "apps": [
+    {
+      "name": "PhantomTrader",
+      "path": "expo",
+      "framework": "react-native"
+    }
+  ]
+}
