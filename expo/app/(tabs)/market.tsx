@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Search, TrendingUp, TrendingDown, Flame, MessageCircle, Newspaper } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
 import { MOCK_STOCKS, simulatePriceChange } from '@/mocks/stocks';
@@ -14,12 +14,14 @@ export default function MarketScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStocks(prevStocks => prevStocks.map(simulatePriceChange));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const interval = setInterval(() => {
+        setStocks(prevStocks => prevStocks.map(simulatePriceChange));
+      }, 3000);
+      return () => clearInterval(interval);
+    }, [])
+  );
 
   const sectors = useMemo(() => {
     const uniqueSectors = [...new Set(MOCK_STOCKS.map(s => s.sector))];

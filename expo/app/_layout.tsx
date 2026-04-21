@@ -82,6 +82,13 @@ function RootLayoutNav() {
           title: 'Group',
         }} 
       />
+      <Stack.Screen 
+        name="politician/[id]" 
+        options={{ 
+          title: 'Politician',
+          headerBackTitle: 'Back to Politicians',
+        }} 
+      />
       <Stack.Screen name="+not-found" />
     </Stack>
   );

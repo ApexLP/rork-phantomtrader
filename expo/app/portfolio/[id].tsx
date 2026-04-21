@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { TrendingUp, TrendingDown, DollarSign, PieChart, ArrowRight } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
 import { usePortfolios } from '@/contexts/PortfolioContext';
@@ -23,12 +23,14 @@ export default function PortfolioDetailScreen() {
     }
   }, [portfolio, setActivePortfolioId]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStocks(prevStocks => prevStocks.map(simulatePriceChange));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const interval = setInterval(() => {
+        setStocks(prevStocks => prevStocks.map(simulatePriceChange));
+      }, 3000);
+      return () => clearInterval(interval);
+    }, [])
+  );
 
   const getStock = useCallback((symbol: string) => {
     return stocks.find(s => s.symbol === symbol);

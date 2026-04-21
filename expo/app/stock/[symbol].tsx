@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform, Keyboard, InputAccessoryView } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { TrendingUp, TrendingDown, Minus, Plus, AlertCircle, ExternalLink, Flame, MessageCircle, Newspaper, ArrowUpRight, ArrowDownRight, Hash } from 'lucide-react-native';
 import * as Linking from 'expo-linking';
 import { colors } from '@/constants/colors';
@@ -22,12 +22,14 @@ export default function StockDetailScreen() {
 
   const stock = useMemo(() => stocks.find(s => s.symbol === symbol), [stocks, symbol]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStocks(prevStocks => prevStocks.map(simulatePriceChange));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      const interval = setInterval(() => {
+        setStocks(prevStocks => prevStocks.map(simulatePriceChange));
+      }, 3000);
+      return () => clearInterval(interval);
+    }, [])
+  );
 
   const currentPosition = useMemo(() => {
     if (!activePortfolio || !symbol) return null;
