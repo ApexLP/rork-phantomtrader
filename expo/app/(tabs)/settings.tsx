@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Image, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronRight, FileText, Shield, Scale, Brain, Mail, ExternalLink, LogOut, User as UserIcon, BookOpen, Briefcase, TrendingUp, Clock, Landmark, Trophy } from 'lucide-react-native';
+import { ChevronRight, FileText, Shield, Scale, Brain, Mail, ExternalLink, LogOut, User as UserIcon, BookOpen, Briefcase, TrendingUp, Clock, Landmark, Trophy, Trash2 } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useAuth, getUserFirstName, getUserId } from '@/contexts/AuthContext';
 
 interface LegalItemProps {
@@ -48,7 +48,8 @@ function LegalItem({ icon, title, subtitle, onPress }: LegalItemProps) {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, backendUser, isAuthenticated, logout, isAuthenticating } = useAuth();
+  const { user, backendUser, isAuthenticated, logout, isAuthenticating, deleteAccount } = useAuth();
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const firstName = getUserFirstName(backendUser, user);
   const userId = getUserId(backendUser, user);
   const email = backendUser?.email ?? user?.email;
@@ -61,6 +62,57 @@ export default function SettingsScreen() {
   const handleLogout = useCallback(() => {
     logout();
   }, [logout]);
+
+  const performDelete = useCallback(async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      const ok = await deleteAccount();
+      if (ok) {
+        if (Platform.OS === 'web') {
+          if (typeof window !== 'undefined') {
+            window.alert('Your account has been deleted.');
+          }
+        } else {
+          Alert.alert('Account deleted', 'Your account has been deleted.');
+        }
+        await logout();
+      } else {
+        if (Platform.OS === 'web') {
+          if (typeof window !== 'undefined') {
+            window.alert('Could not delete your account. Please try again or contact support.');
+          }
+        } else {
+          Alert.alert(
+            'Delete failed',
+            'Could not delete your account. Please try again or contact support at info@apexleadpros.com.'
+          );
+        }
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteAccount, logout, isDeleting]);
+
+  const handleDeleteAccount = useCallback(() => {
+    if (isDeleting) return;
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(
+        'Delete account?\n\nThis will permanently delete your PhantomTrader account and all associated data. This action cannot be undone.'
+      )) {
+        performDelete();
+      }
+      return;
+    }
+    Alert.alert(
+      'Delete account?',
+      'This will permanently delete your PhantomTrader account and all associated data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: performDelete },
+      ]
+    );
+  }, [performDelete, isDeleting]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -214,6 +266,38 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {isAuthenticated && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Danger Zone</Text>
+          <View style={[styles.sectionCard, styles.dangerCard]}>
+            <TouchableOpacity
+              style={styles.legalItem}
+              onPress={handleDeleteAccount}
+              activeOpacity={0.6}
+              disabled={isDeleting}
+              testID="delete-account-button"
+            >
+              <View style={[styles.legalItemIcon, styles.dangerIcon]}>
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color={colors.negative} />
+                ) : (
+                  <Trash2 size={20} color={colors.negative} />
+                )}
+              </View>
+              <View style={styles.legalItemContent}>
+                <Text style={[styles.legalItemTitle, styles.dangerTitle]}>
+                  {isDeleting ? 'Deleting account…' : 'Delete Account'}
+                </Text>
+                <Text style={styles.legalItemSubtitle}>
+                  Permanently remove your account and data
+                </Text>
+              </View>
+              <ChevronRight size={18} color={colors.negative + 'AA'} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>Apex Lead Pros LLC</Text>
@@ -482,5 +566,14 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: colors.textMuted,
     fontStyle: 'italic' as const,
+  },
+  dangerCard: {
+    borderColor: colors.negative + '40',
+  },
+  dangerIcon: {
+    backgroundColor: colors.negative + '18',
+  },
+  dangerTitle: {
+    color: colors.negative,
   },
 });

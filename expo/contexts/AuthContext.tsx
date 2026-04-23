@@ -491,6 +491,39 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, [persistSession]);
 
+  const deleteAccount = useCallback(async (): Promise<boolean> => {
+    const current = session;
+    if (!current?.accessToken) {
+      console.log('[Auth0] deleteAccount: no access token');
+      return false;
+    }
+    const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+    if (!base) {
+      console.log('[Auth0] deleteAccount: EXPO_PUBLIC_RORK_API_BASE_URL not set');
+      return false;
+    }
+    try {
+      const url = `${base.replace(/\/$/, '')}/auth/me`;
+      console.log('[Auth0] Deleting account', url);
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${current.accessToken}`,
+        },
+      });
+      if (!res.ok) {
+        console.log('[Auth0] DELETE /auth/me failed', res.status);
+        return false;
+      }
+      console.log('[Auth0] Account deleted on backend');
+      return true;
+    } catch (e) {
+      console.log('[Auth0] deleteAccount error', e);
+      return false;
+    }
+  }, [session]);
+
   const logout = useCallback(async () => {
     console.log('[Auth0] Logout initiated');
     const previous = session;
@@ -592,8 +625,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       error,
       login,
       logout,
+      deleteAccount,
       getCurrentUser: (): Auth0User | null => session?.user ?? null,
     }),
-    [session, isRestoring, isAuthenticating, error, login, logout]
+    [session, isRestoring, isAuthenticating, error, login, logout, deleteAccount]
   );
 });

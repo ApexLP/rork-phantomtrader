@@ -18,7 +18,7 @@ export default function MarketScreen() {
     useCallback(() => {
       const interval = setInterval(() => {
         setStocks(prevStocks => prevStocks.map(simulatePriceChange));
-      }, 3000);
+      }, 15000);
       return () => clearInterval(interval);
     }, [])
   );
