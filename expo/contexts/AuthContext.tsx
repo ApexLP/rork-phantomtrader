@@ -524,8 +524,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     const DELETE_ACCOUNT_BASE = 'https://x8ki-letl-twmt.n7.xano.io/api:iTuJ8HwQ';
     const url = `${DELETE_ACCOUNT_BASE.replace(/\/$/, '')}/delete-account`;
-    const sub = current.user?.sub;
-    const body = JSON.stringify({ sub, reason: 'user_request' });
 
     let activeSession: StoredSession = current;
 
@@ -551,6 +549,44 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     activeSession = refreshed;
     setSession(refreshed);
     await persistSession(refreshed);
+
+    const decodeJwtSub = (jwt: string): string | undefined => {
+      try {
+        const parts = jwt.split('.');
+        if (parts.length < 2) return undefined;
+        let payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const pad = payload.length % 4;
+        if (pad) payload += '='.repeat(4 - pad);
+        const decoded =
+          typeof atob === 'function'
+            ? atob(payload)
+            : Buffer.from(payload, 'base64').toString('utf-8');
+        const json = JSON.parse(decoded) as { sub?: string };
+        return typeof json.sub === 'string' && json.sub.length > 0 ? json.sub : undefined;
+      } catch (e) {
+        console.log('[Auth0] deleteAccount: failed to decode JWT sub', e);
+        return undefined;
+      }
+    };
+
+    const sub =
+      activeSession.user?.sub ||
+      current.user?.sub ||
+      decodeJwtSub(activeSession.accessToken) ||
+      (activeSession.idToken ? decodeJwtSub(activeSession.idToken) : undefined);
+
+    if (!sub || sub.trim().length === 0) {
+      console.log('[Auth0] deleteAccount: missing user.sub, aborting and signing out');
+      return {
+        ok: false,
+        sessionExpired: true,
+        error: 'Could not verify your identity. Please sign in again.',
+      };
+    }
+
+    const payload = { sub, reason: 'user_request' as const };
+    console.log('[Auth0] deleteAccount payload', { sub: payload.sub, reason: payload.reason });
+    const body = JSON.stringify(payload);
 
     const doFetch = async (token: string): Promise<Response> => {
       console.log('[Auth0] deleteAccount POST', url, 'tokenLen=', token.length);
