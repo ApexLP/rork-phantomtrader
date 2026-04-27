@@ -81,6 +81,9 @@ export default function SettingsScreen() {
       if (result.ok) {
         await logout();
         showMessage('Account deleted', 'Your account has been deleted.');
+      } else if (result.sessionExpired) {
+        await logout();
+        showMessage('Session expired', 'Session expired. Please sign in again.');
       } else {
         showMessage(
           'Delete failed',

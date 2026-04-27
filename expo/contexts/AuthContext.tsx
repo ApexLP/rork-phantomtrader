@@ -512,10 +512,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, []);
 
-  const deleteAccount = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+  const deleteAccount = useCallback(async (): Promise<{ ok: boolean; error?: string; sessionExpired?: boolean }> => {
     const current = session;
     if (!current) {
-      return { ok: false, error: 'You are not signed in. Please sign in again and retry.' };
+      return {
+        ok: false,
+        sessionExpired: true,
+        error: 'Session expired. Please sign in again.',
+      };
     }
 
     const DELETE_ACCOUNT_BASE = 'https://x8ki-letl-twmt.n7.xano.io/api:iTuJ8HwQ';
@@ -525,36 +529,28 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     let activeSession: StoredSession = current;
 
-    const ensureFreshToken = async (): Promise<boolean> => {
-      const token = activeSession.accessToken;
-      const now = Date.now();
-      const willExpireSoon =
-        typeof activeSession.expiresAt === 'number' &&
-        activeSession.expiresAt <= now + 60_000;
-      const missing = !token || token.trim().length === 0;
-      if (!missing && !willExpireSoon) return true;
-      if (!activeSession.refreshToken) {
-        console.log('[Auth0] deleteAccount: no refresh token available');
-        return !missing;
-      }
-      console.log('[Auth0] deleteAccount: refreshing token before request', { missing, willExpireSoon });
-      const refreshed = await refreshSession(activeSession);
-      if (refreshed && refreshed.accessToken) {
-        activeSession = refreshed;
-        setSession(refreshed);
-        await persistSession(refreshed);
-        return true;
-      }
-      return !missing;
-    };
-
-    const ok = await ensureFreshToken();
-    if (!ok || !activeSession.accessToken || activeSession.accessToken.trim().length === 0) {
+    if (!activeSession.refreshToken) {
+      console.log('[Auth0] deleteAccount: no refresh token, cannot guarantee fresh access token');
       return {
         ok: false,
-        error: 'Your session expired. Please sign out, sign back in, and try again.',
+        sessionExpired: true,
+        error: 'Session expired. Please sign in again.',
       };
     }
+
+    console.log('[Auth0] deleteAccount: forcing fresh access token before request');
+    const refreshed = await refreshSession(activeSession);
+    if (!refreshed || !refreshed.accessToken || refreshed.accessToken.trim().length === 0) {
+      console.log('[Auth0] deleteAccount: token refresh failed, signing user out');
+      return {
+        ok: false,
+        sessionExpired: true,
+        error: 'Session expired. Please sign in again.',
+      };
+    }
+    activeSession = refreshed;
+    setSession(refreshed);
+    await persistSession(refreshed);
 
     const doFetch = async (token: string): Promise<Response> => {
       console.log('[Auth0] deleteAccount POST', url, 'tokenLen=', token.length);
@@ -581,34 +577,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       networkError = e instanceof Error ? e.message : 'Network error';
     }
 
-    if (res && (res.status === 401 || res.status === 403)) {
-      console.log('[Auth0] deleteAccount got', res.status, '- attempting silent refresh and retry');
-      if (activeSession.refreshToken) {
-        const refreshed = await refreshSession(activeSession);
-        if (refreshed && refreshed.accessToken) {
-          activeSession = refreshed;
-          setSession(refreshed);
-          await persistSession(refreshed);
-          try {
-            res = await doFetch(activeSession.accessToken);
-          } catch (e) {
-            console.log('[Auth0] deleteAccount retry network error', e);
-            networkError = e instanceof Error ? e.message : 'Network error';
-            res = null;
-          }
-        } else {
-          console.log('[Auth0] deleteAccount: refresh failed, cannot retry');
-          return {
-            ok: false,
-            error: 'Your session expired. Please sign out, sign back in, and try again.',
-          };
-        }
-      } else {
-        return {
-          ok: false,
-          error: 'Your session expired. Please sign out, sign back in, and try again.',
-        };
-      }
+    if (res && res.status === 401) {
+      console.log('[Auth0] deleteAccount got 401, signing user out');
+      return {
+        ok: false,
+        sessionExpired: true,
+        error: 'Session expired. Please sign in again.',
+      };
     }
 
     if (res && res.ok) {
@@ -637,12 +612,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
     }
 
-    if (lastStatus === 401 || lastStatus === 403) {
+    if (lastStatus === 403) {
       return {
         ok: false,
-        error:
-          serverMessage ||
-          'Your session expired. Please sign out, sign back in, and try again.',
+        sessionExpired: true,
+        error: 'Session expired. Please sign in again.',
       };
     }
 
