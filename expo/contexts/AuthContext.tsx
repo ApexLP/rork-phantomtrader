@@ -517,19 +517,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (!current?.accessToken) {
       return { ok: false, error: 'You are not signed in. Please sign in again and retry.' };
     }
-    const xanoBase = getApiBaseUrl();
-    if (!xanoBase) {
-      console.log('[Auth0] deleteAccount: API base URL is missing in environment');
-      return {
-        ok: false,
-        error: 'Server URL is not configured. Please contact support.',
-      };
-    }
-
-    const root = xanoBase.replace(/\/$/, '');
+    const DELETE_ACCOUNT_BASE = 'https://x8ki-letl-twmt.n7.xano.io/api:iTuJ8HwQ';
+    const root = DELETE_ACCOUNT_BASE.replace(/\/$/, '');
     const sub = current.user?.sub;
     const candidates: { method: 'DELETE' | 'POST'; url: string; body?: string }[] = [
-      { method: 'POST', url: `${root}/user/delete-account`, body: JSON.stringify({ sub, reason: 'user_request' }) },
+      { method: 'POST', url: `${root}/delete-account`, body: JSON.stringify({ sub, reason: 'user_request' }) },
     ];
 
     let lastStatus = 0;
