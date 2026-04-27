@@ -623,10 +623,70 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       };
     }
 
-    if (res && res.ok) {
-      console.log('[Auth0] Account deleted');
-      await clearLocalAppData();
-      return { ok: true, status: res.status };
+    if (res && (res.status === 200 || res.status === 204)) {
+      console.log('[Auth0] Delete API returned 2xx, verifying via /auth/me', res.status);
+      const verifyBase = getApiBaseUrl();
+      let verified = false;
+      let verifyStatus = 0;
+      if (verifyBase) {
+        const verifyUrl = `${verifyBase.replace(/\/$/, '')}/auth/me`;
+        try {
+          const verifyRes = await fetch(verifyUrl, {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+              Authorization: `Bearer ${activeSession.accessToken}`,
+            },
+          });
+          verifyStatus = verifyRes.status;
+          console.log('[Auth0] deleteAccount verify /auth/me status', verifyStatus);
+          if (verifyRes.status === 401 || verifyRes.status === 404) {
+            verified = true;
+          } else if (verifyRes.ok) {
+            try {
+              const text = await verifyRes.text();
+              if (!text || text.trim().length === 0 || text.trim() === 'null') {
+                verified = true;
+              } else {
+                try {
+                  const parsed = JSON.parse(text) as { id?: unknown; sub?: unknown; deleted?: boolean };
+                  if (parsed && parsed.deleted === true) {
+                    verified = true;
+                  } else if (!parsed || (parsed.id == null && parsed.sub == null)) {
+                    verified = true;
+                  } else {
+                    verified = false;
+                  }
+                } catch {
+                  verified = false;
+                }
+              }
+            } catch {
+              verified = false;
+            }
+          } else {
+            verified = false;
+          }
+        } catch (e) {
+          console.log('[Auth0] deleteAccount verify error', e);
+          verified = true;
+        }
+      } else {
+        verified = true;
+      }
+
+      if (verified) {
+        console.log('[Auth0] Account deletion verified');
+        await clearLocalAppData();
+        return { ok: true, status: res.status };
+      }
+
+      console.log('[Auth0] Account still exists after delete call');
+      return {
+        ok: false,
+        status: res.status,
+        error: 'Delete failed. Please try again.',
+      };
     }
 
     if (res) {

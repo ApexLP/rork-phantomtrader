@@ -105,8 +105,8 @@ export default function SettingsScreen() {
       }
 
       showMessage(
-        'Unable to delete account',
-        'Unable to delete account. Please try again.'
+        'Delete failed',
+        result.error ?? 'Delete failed. Please try again.'
       );
     } catch (e) {
       console.log('[Settings] performDelete error', e);
