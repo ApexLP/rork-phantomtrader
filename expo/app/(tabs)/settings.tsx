@@ -63,56 +63,86 @@ export default function SettingsScreen() {
     logout();
   }, [logout]);
 
+  const showMessage = useCallback((title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.alert(`${title}\n\n${message}`);
+      }
+    } else {
+      Alert.alert(title, message);
+    }
+  }, []);
+
   const performDelete = useCallback(async () => {
     if (isDeleting) return;
     setIsDeleting(true);
     try {
-      const ok = await deleteAccount();
-      if (ok) {
-        if (Platform.OS === 'web') {
-          if (typeof window !== 'undefined') {
-            window.alert('Your account has been deleted.');
-          }
-        } else {
-          Alert.alert('Account deleted', 'Your account has been deleted.');
-        }
+      const result = await deleteAccount();
+      if (result.ok) {
         await logout();
+        showMessage('Account deleted', 'Your account has been deleted.');
       } else {
-        if (Platform.OS === 'web') {
-          if (typeof window !== 'undefined') {
-            window.alert('Could not delete your account. Please try again or contact support.');
-          }
-        } else {
-          Alert.alert(
-            'Delete failed',
-            'Could not delete your account. Please try again or contact support at info@apexleadpros.com.'
-          );
-        }
+        showMessage(
+          'Delete failed',
+          (result.error ?? 'Unknown error.') +
+            '\n\nIf this keeps happening, contact support at info@apexleadpros.com.'
+        );
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unexpected error.';
+      showMessage(
+        'Delete failed',
+        `${msg}\n\nIf this keeps happening, contact support at info@apexleadpros.com.`
+      );
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteAccount, logout, isDeleting]);
+  }, [deleteAccount, logout, isDeleting, showMessage]);
 
-  const handleDeleteAccount = useCallback(() => {
-    if (isDeleting) return;
+  const askFinalConfirm = useCallback(() => {
     if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm(
-        'Delete account?\n\nThis will permanently delete your PhantomTrader account and all associated data. This action cannot be undone.'
-      )) {
+      if (
+        typeof window !== 'undefined' &&
+        window.confirm(
+          'Final confirmation\n\nThis is your last chance to cancel.\n\nTap OK to permanently delete your PhantomTrader account, portfolios, trades, and all associated data. This cannot be undone.'
+        )
+      ) {
         performDelete();
       }
       return;
     }
     Alert.alert(
-      'Delete account?',
-      'This will permanently delete your PhantomTrader account and all associated data. This action cannot be undone.',
+      'Final confirmation',
+      'This is your last chance to cancel. Tap "Permanently Delete" to remove your account, portfolios, trades, and all associated data. This cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: performDelete },
+        { text: 'Keep my account', style: 'cancel' },
+        { text: 'Permanently Delete', style: 'destructive', onPress: performDelete },
       ]
     );
-  }, [performDelete, isDeleting]);
+  }, [performDelete]);
+
+  const handleDeleteAccount = useCallback(() => {
+    if (isDeleting) return;
+    if (Platform.OS === 'web') {
+      if (
+        typeof window !== 'undefined' &&
+        window.confirm(
+          'Are you sure?\n\nThis permanently deletes your account and data.'
+        )
+      ) {
+        askFinalConfirm();
+      }
+      return;
+    }
+    Alert.alert(
+      'Are you sure?',
+      'This permanently deletes your account and data.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', style: 'destructive', onPress: askFinalConfirm },
+      ]
+    );
+  }, [askFinalConfirm, isDeleting]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
