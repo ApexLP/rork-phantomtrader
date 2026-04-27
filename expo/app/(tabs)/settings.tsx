@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Image, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Image, ActivityIndicator, Alert, Platform, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ChevronRight, FileText, Shield, Scale, Brain, Mail, ExternalLink, LogOut, User as UserIcon, BookOpen, Briefcase, TrendingUp, Clock, Landmark, Trophy, Trash2 } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
@@ -50,6 +50,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { user, backendUser, isAuthenticated, logout, isAuthenticating, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [confirmVisible, setConfirmVisible] = useState<boolean>(false);
+  const [successVisible, setSuccessVisible] = useState<boolean>(false);
   const firstName = getUserFirstName(backendUser, user);
   const userId = getUserId(backendUser, user);
   const email = backendUser?.email ?? user?.email;
@@ -75,77 +77,54 @@ export default function SettingsScreen() {
 
   const performDelete = useCallback(async () => {
     if (isDeleting) return;
+    setConfirmVisible(false);
     setIsDeleting(true);
     try {
       const result = await deleteAccount();
-      if (result.ok) {
-        await logout();
-        showMessage('Account deleted', 'Your account has been deleted.');
-      } else if (result.sessionExpired) {
+      const status = result.status ?? 0;
+      const isSuccess = result.ok === true && status >= 200 && status < 300;
+
+      if (isSuccess) {
+        console.log('[Settings] Delete success, status:', status);
+        setSuccessVisible(true);
+        setTimeout(() => {
+          logout().catch((err) => console.log('[Settings] logout after delete error', err));
+        }, 1200);
+        return;
+      }
+
+      if (status === 401 || result.sessionExpired) {
         await logout();
         showMessage('Session expired', 'Session expired. Please sign in again.');
-      } else {
-        showMessage(
-          'Delete failed',
-          (result.error ?? 'Unknown error.') +
-            '\n\nIf this keeps happening, contact support at info@apexleadpros.com.'
-        );
+        return;
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unexpected error.';
+
+      if (status === 404) {
+        showMessage('Account not found', 'Account not found.');
+        return;
+      }
+
       showMessage(
-        'Delete failed',
-        `${msg}\n\nIf this keeps happening, contact support at info@apexleadpros.com.`
+        'Unable to delete account',
+        'Unable to delete account. Please try again.'
       );
+    } catch (e) {
+      console.log('[Settings] performDelete error', e);
+      showMessage('Unable to delete account', 'Unable to delete account. Please try again.');
     } finally {
       setIsDeleting(false);
     }
   }, [deleteAccount, logout, isDeleting, showMessage]);
 
-  const askFinalConfirm = useCallback(() => {
-    if (Platform.OS === 'web') {
-      if (
-        typeof window !== 'undefined' &&
-        window.confirm(
-          'Final confirmation\n\nThis is your last chance to cancel.\n\nTap OK to permanently delete your PhantomTrader account, portfolios, trades, and all associated data. This cannot be undone.'
-        )
-      ) {
-        performDelete();
-      }
-      return;
-    }
-    Alert.alert(
-      'Final confirmation',
-      'This is your last chance to cancel. Tap "Permanently Delete" to remove your account, portfolios, trades, and all associated data. This cannot be undone.',
-      [
-        { text: 'Keep my account', style: 'cancel' },
-        { text: 'Permanently Delete', style: 'destructive', onPress: performDelete },
-      ]
-    );
-  }, [performDelete]);
-
   const handleDeleteAccount = useCallback(() => {
     if (isDeleting) return;
-    if (Platform.OS === 'web') {
-      if (
-        typeof window !== 'undefined' &&
-        window.confirm(
-          'Are you sure?\n\nThis permanently deletes your account and data.'
-        )
-      ) {
-        askFinalConfirm();
-      }
-      return;
-    }
-    Alert.alert(
-      'Are you sure?',
-      'This permanently deletes your account and data.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Continue', style: 'destructive', onPress: askFinalConfirm },
-      ]
-    );
-  }, [askFinalConfirm, isDeleting]);
+    setConfirmVisible(true);
+  }, [isDeleting]);
+
+  const handleSuccessDismiss = useCallback(() => {
+    setSuccessVisible(false);
+    logout().catch((err) => console.log('[Settings] logout dismiss error', err));
+  }, [logout]);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -336,6 +315,66 @@ export default function SettingsScreen() {
         <Text style={styles.footerText}>Apex Lead Pros LLC</Text>
         <Text style={styles.footerVersion}>PhantomTrader v1.0.0</Text>
       </View>
+
+      <Modal
+        visible={confirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} testID="delete-confirm-modal">
+            <View style={styles.modalIconWrap}>
+              <Trash2 size={28} color={colors.negative} />
+            </View>
+            <Text style={styles.modalTitle}>Delete your account?</Text>
+            <Text style={styles.modalBody}>This action is permanent and cannot be undone.</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setConfirmVisible(false)}
+                activeOpacity={0.7}
+                testID="delete-cancel-button"
+              >
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnDestructive]}
+                onPress={performDelete}
+                activeOpacity={0.85}
+                testID="delete-confirm-button"
+              >
+                <Text style={styles.modalBtnDestructiveText}>Delete Account</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={successVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleSuccessDismiss}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} testID="delete-success-modal">
+            <View style={[styles.modalIconWrap, styles.modalIconSuccess]}>
+              <Trash2 size={28} color={colors.positive ?? '#22C55E'} />
+            </View>
+            <Text style={styles.modalTitle}>Account deleted</Text>
+            <Text style={styles.modalBody}>Your account has been successfully deleted.</Text>
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnFull, styles.modalBtnPrimary]}
+              onPress={handleSuccessDismiss}
+              activeOpacity={0.85}
+              testID="delete-success-dismiss"
+            >
+              <Text style={styles.modalBtnPrimaryText}>Continue</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -608,5 +647,93 @@ const styles = StyleSheet.create({
   },
   dangerTitle: {
     color: colors.negative,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 22,
+    alignItems: 'center',
+  },
+  modalIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: colors.negative + '18',
+    borderWidth: 1,
+    borderColor: colors.negative + '40',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  modalIconSuccess: {
+    backgroundColor: (colors.positive ?? '#22C55E') + '18',
+    borderColor: (colors.positive ?? '#22C55E') + '40',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: colors.text,
+    marginBottom: 8,
+    textAlign: 'center' as const,
+  },
+  modalBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    textAlign: 'center' as const,
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  modalBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnFull: {
+    flex: 0,
+    width: '100%',
+  },
+  modalBtnCancel: {
+    backgroundColor: colors.surfaceLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalBtnCancelText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: colors.text,
+  },
+  modalBtnDestructive: {
+    backgroundColor: colors.negative,
+  },
+  modalBtnDestructiveText: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+  },
+  modalBtnPrimary: {
+    backgroundColor: colors.primary,
+  },
+  modalBtnPrimaryText: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#000000',
   },
 });

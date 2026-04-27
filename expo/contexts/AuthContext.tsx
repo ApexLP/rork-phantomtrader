@@ -512,7 +512,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
   }, []);
 
-  const deleteAccount = useCallback(async (): Promise<{ ok: boolean; error?: string; sessionExpired?: boolean }> => {
+  const deleteAccount = useCallback(async (): Promise<{ ok: boolean; error?: string; sessionExpired?: boolean; status?: number }> => {
     const current = session;
     if (!current) {
       return {
@@ -618,6 +618,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       return {
         ok: false,
         sessionExpired: true,
+        status: 401,
         error: 'Session expired. Please sign in again.',
       };
     }
@@ -625,7 +626,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (res && res.ok) {
       console.log('[Auth0] Account deleted');
       await clearLocalAppData();
-      return { ok: true };
+      return { ok: true, status: res.status };
     }
 
     if (res) {
@@ -652,6 +653,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       return {
         ok: false,
         sessionExpired: true,
+        status: 403,
         error: 'Session expired. Please sign in again.',
       };
     }
@@ -665,7 +667,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           : lastStatus === 0
             ? 'Could not reach the server. Check your connection and try again.'
             : `Server responded with status ${lastStatus}.`);
-    return { ok: false, error: reason };
+    return { ok: false, status: lastStatus || undefined, error: reason };
   }, [session, clearLocalAppData, refreshSession, persistSession]);
 
   const logout = useCallback(async () => {
