@@ -516,21 +516,18 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (!current?.accessToken) {
       return { ok: false, error: 'You are not signed in. Please sign in again and retry.' };
     }
-    const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-    if (!base) {
+    const xanoBase = process.env.EXPO_PUBLIC_XANO_API_BASE_URL;
+    if (!xanoBase) {
       return {
         ok: false,
         error: 'Server URL is not configured. Please contact support.',
       };
     }
 
-    const root = base.replace(/\/$/, '');
+    const root = xanoBase.replace(/\/$/, '');
     const sub = current.user?.sub;
     const candidates: { method: 'DELETE' | 'POST'; url: string; body?: string }[] = [
-      { method: 'DELETE', url: `${root}/auth/me` },
-      { method: 'POST', url: `${root}/auth/me/delete`, body: JSON.stringify({ sub, reason: 'user_request' }) },
-      { method: 'POST', url: `${root}/auth/delete`, body: JSON.stringify({ sub, reason: 'user_request' }) },
-      { method: 'POST', url: `${root}/auth/me`, body: JSON.stringify({ action: 'delete', sub, status: 'deleted' }) },
+      { method: 'POST', url: `${root}/user/delete-account`, body: JSON.stringify({ sub, reason: 'user_request' }) },
     ];
 
     let lastStatus = 0;
