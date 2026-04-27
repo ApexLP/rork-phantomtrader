@@ -1,5 +1,5 @@
-const DEVELOPMENT_XANO_API_BASE_URL = 'https://x8ki-letl-twmt.n7.xano.io/api:A4bf1tve';
-const PRODUCTION_XANO_API_BASE_URL = 'https://x8ki-letl-twmt.n7.xano.io/api:A4bf1tve';
+const DEVELOPMENT_XANO_API_BASE_URL = 'https://x8ki-letl-twmt.n7.xano.io/api:iTuJ8HwQ';
+const PRODUCTION_XANO_API_BASE_URL = 'https://x8ki-letl-twmt.n7.xano.io/api:iTuJ8HwQ';
 
 export type AppEnvironment = 'development' | 'production';
 
