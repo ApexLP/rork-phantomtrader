@@ -1,4 +1,18 @@
+const DEVELOPMENT_XANO_API_BASE_URL = 'https://x8ki-letl-twmt.n7.xano.io/api:A4bf1tve';
 const PRODUCTION_XANO_API_BASE_URL = 'https://x8ki-letl-twmt.n7.xano.io/api:A4bf1tve';
+
+export type AppEnvironment = 'development' | 'production';
+
+function detectEnvironment(): AppEnvironment {
+  const explicit = process.env.EXPO_PUBLIC_APP_ENV;
+  if (explicit === 'development' || explicit === 'production') {
+    return explicit;
+  }
+  if (__DEV__) return 'development';
+  return 'production';
+}
+
+export const APP_ENV: AppEnvironment = detectEnvironment();
 
 function isTemporaryRorkDomain(url: string | undefined | null): boolean {
   if (!url) return false;
@@ -6,18 +20,23 @@ function isTemporaryRorkDomain(url: string | undefined | null): boolean {
 }
 
 function pickBase(): string {
-  const xano = process.env.EXPO_PUBLIC_XANO_API_BASE_URL;
+  const override = process.env.EXPO_PUBLIC_XANO_API_BASE_URL;
 
-  if (xano && xano.length > 0 && !isTemporaryRorkDomain(xano)) {
-    console.log('[api] Using configured Xano API base URL');
-    return xano.replace(/\/$/, '');
+  if (override && override.length > 0 && !isTemporaryRorkDomain(override)) {
+    console.log(`[api] Using EXPO_PUBLIC_XANO_API_BASE_URL override (env=${APP_ENV})`);
+    return override.replace(/\/$/, '');
   }
 
-  if (xano && isTemporaryRorkDomain(xano)) {
-    console.log('[api] Ignoring temporary Rork domain in EXPO_PUBLIC_XANO_API_BASE_URL, using production Xano URL');
+  if (override && isTemporaryRorkDomain(override)) {
+    console.log('[api] Ignoring temporary Rork domain in EXPO_PUBLIC_XANO_API_BASE_URL');
   }
 
-  console.log('[api] Using built-in production Xano API base URL');
+  if (APP_ENV === 'development') {
+    console.log('[api] Using DEVELOPMENT Xano API base URL');
+    return DEVELOPMENT_XANO_API_BASE_URL;
+  }
+
+  console.log('[api] Using PRODUCTION Xano API base URL');
   return PRODUCTION_XANO_API_BASE_URL;
 }
 
