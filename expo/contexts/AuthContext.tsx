@@ -514,7 +514,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const deleteAccount = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
     const current = session;
-    if (!current?.accessToken) {
+    if (!current) {
       return { ok: false, error: 'You are not signed in. Please sign in again and retry.' };
     }
 
@@ -525,26 +525,44 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     let activeSession: StoredSession = current;
 
-    const now = Date.now();
-    const willExpireSoon =
-      typeof activeSession.expiresAt === 'number' &&
-      activeSession.expiresAt <= now + 60_000;
-    if (willExpireSoon && activeSession.refreshToken) {
-      console.log('[Auth0] deleteAccount: token near expiry, refreshing first');
+    const ensureFreshToken = async (): Promise<boolean> => {
+      const token = activeSession.accessToken;
+      const now = Date.now();
+      const willExpireSoon =
+        typeof activeSession.expiresAt === 'number' &&
+        activeSession.expiresAt <= now + 60_000;
+      const missing = !token || token.trim().length === 0;
+      if (!missing && !willExpireSoon) return true;
+      if (!activeSession.refreshToken) {
+        console.log('[Auth0] deleteAccount: no refresh token available');
+        return !missing;
+      }
+      console.log('[Auth0] deleteAccount: refreshing token before request', { missing, willExpireSoon });
       const refreshed = await refreshSession(activeSession);
-      if (refreshed) {
+      if (refreshed && refreshed.accessToken) {
         activeSession = refreshed;
         setSession(refreshed);
         await persistSession(refreshed);
+        return true;
       }
+      return !missing;
+    };
+
+    const ok = await ensureFreshToken();
+    if (!ok || !activeSession.accessToken || activeSession.accessToken.trim().length === 0) {
+      return {
+        ok: false,
+        error: 'Your session expired. Please sign out, sign back in, and try again.',
+      };
     }
 
     const doFetch = async (token: string): Promise<Response> => {
-      console.log('[Auth0] deleteAccount POST', url);
+      console.log('[Auth0] deleteAccount POST', url, 'tokenLen=', token.length);
       return fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body,
@@ -567,7 +585,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       console.log('[Auth0] deleteAccount got', res.status, '- attempting silent refresh and retry');
       if (activeSession.refreshToken) {
         const refreshed = await refreshSession(activeSession);
-        if (refreshed) {
+        if (refreshed && refreshed.accessToken) {
           activeSession = refreshed;
           setSession(refreshed);
           await persistSession(refreshed);
@@ -580,7 +598,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           }
         } else {
           console.log('[Auth0] deleteAccount: refresh failed, cannot retry');
+          return {
+            ok: false,
+            error: 'Your session expired. Please sign out, sign back in, and try again.',
+          };
         }
+      } else {
+        return {
+          ok: false,
+          error: 'Your session expired. Please sign out, sign back in, and try again.',
+        };
       }
     }
 
