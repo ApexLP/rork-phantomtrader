@@ -12,6 +12,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Check, Sparkles, ArrowRight, Mail } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
 import { useAuth, getUserFirstName, type BackendUser } from '@/contexts/AuthContext';
+import { getApiBaseUrl } from '@/constants/api';
 
 interface OnboardingScreenProps {
   onComplete: (updated: BackendUser) => void;
@@ -26,7 +27,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
 
   const completeMutation = useMutation({
     mutationFn: async (marketingOptIn: boolean): Promise<BackendUser> => {
-      const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+      const base = getApiBaseUrl();
       const nowIso = new Date().toISOString();
       const payload = {
         marketing_opt_in: marketingOptIn,

@@ -6,6 +6,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { AUTH0_CONFIG } from '@/constants/auth0';
+import { getApiBaseUrl } from '@/constants/api';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -140,9 +141,9 @@ async function syncUserWithBackend(
   accessToken: string,
   profile: Auth0User
 ): Promise<BackendUser | null> {
-  const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  const base = getApiBaseUrl();
   if (!base) {
-    console.log('[Auth0] EXPO_PUBLIC_RORK_API_BASE_URL not set, skipping backend sync');
+    console.log('[Auth0] API base URL not configured, skipping backend sync');
     return null;
   }
   try {
@@ -516,8 +517,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (!current?.accessToken) {
       return { ok: false, error: 'You are not signed in. Please sign in again and retry.' };
     }
-    const xanoBase = process.env.EXPO_PUBLIC_XANO_API_BASE_URL;
+    const xanoBase = getApiBaseUrl();
     if (!xanoBase) {
+      console.log('[Auth0] deleteAccount: API base URL is missing in environment');
       return {
         ok: false,
         error: 'Server URL is not configured. Please contact support.',
