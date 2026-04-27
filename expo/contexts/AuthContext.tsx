@@ -517,52 +517,87 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (!current?.accessToken) {
       return { ok: false, error: 'You are not signed in. Please sign in again and retry.' };
     }
+
     const DELETE_ACCOUNT_BASE = 'https://x8ki-letl-twmt.n7.xano.io/api:iTuJ8HwQ';
-    const root = DELETE_ACCOUNT_BASE.replace(/\/$/, '');
+    const url = `${DELETE_ACCOUNT_BASE.replace(/\/$/, '')}/delete-account`;
     const sub = current.user?.sub;
-    const candidates: { method: 'DELETE' | 'POST'; url: string; body?: string }[] = [
-      { method: 'POST', url: `${root}/delete-account`, body: JSON.stringify({ sub, reason: 'user_request' }) },
-    ];
+    const body = JSON.stringify({ sub, reason: 'user_request' });
 
-    let lastStatus = 0;
-    let lastBody = '';
+    let activeSession: StoredSession = current;
 
-    for (const c of candidates) {
-      try {
-        console.log('[Auth0] deleteAccount attempt', c.method, c.url);
-        const res = await fetch(c.url, {
-          method: c.method,
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${current.accessToken}`,
-          },
-          body: c.body,
-        });
-        if (res.ok) {
-          console.log('[Auth0] Account deleted via', c.method, c.url);
-          await clearLocalAppData();
-          return { ok: true };
-        }
-        lastStatus = res.status;
-        try {
-          lastBody = await res.text();
-        } catch {
-          lastBody = '';
-        }
-        console.log('[Auth0] deleteAccount failed', c.method, c.url, res.status, lastBody);
-        if (res.status === 401 || res.status === 403) {
-          return {
-            ok: false,
-            error: 'Your session expired. Please sign out, sign back in, and try again.',
-          };
-        }
-        if (res.status >= 500) {
-          continue;
-        }
-      } catch (e) {
-        console.log('[Auth0] deleteAccount network error', e);
-        lastBody = e instanceof Error ? e.message : 'Network error';
+    const now = Date.now();
+    const willExpireSoon =
+      typeof activeSession.expiresAt === 'number' &&
+      activeSession.expiresAt <= now + 60_000;
+    if (willExpireSoon && activeSession.refreshToken) {
+      console.log('[Auth0] deleteAccount: token near expiry, refreshing first');
+      const refreshed = await refreshSession(activeSession);
+      if (refreshed) {
+        activeSession = refreshed;
+        setSession(refreshed);
+        await persistSession(refreshed);
       }
+    }
+
+    const doFetch = async (token: string): Promise<Response> => {
+      console.log('[Auth0] deleteAccount POST', url);
+      return fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body,
+      });
+    };
+
+    let res: Response | null = null;
+    let lastBody = '';
+    let lastStatus = 0;
+    let networkError = '';
+
+    try {
+      res = await doFetch(activeSession.accessToken);
+    } catch (e) {
+      console.log('[Auth0] deleteAccount network error', e);
+      networkError = e instanceof Error ? e.message : 'Network error';
+    }
+
+    if (res && (res.status === 401 || res.status === 403)) {
+      console.log('[Auth0] deleteAccount got', res.status, '- attempting silent refresh and retry');
+      if (activeSession.refreshToken) {
+        const refreshed = await refreshSession(activeSession);
+        if (refreshed) {
+          activeSession = refreshed;
+          setSession(refreshed);
+          await persistSession(refreshed);
+          try {
+            res = await doFetch(activeSession.accessToken);
+          } catch (e) {
+            console.log('[Auth0] deleteAccount retry network error', e);
+            networkError = e instanceof Error ? e.message : 'Network error';
+            res = null;
+          }
+        } else {
+          console.log('[Auth0] deleteAccount: refresh failed, cannot retry');
+        }
+      }
+    }
+
+    if (res && res.ok) {
+      console.log('[Auth0] Account deleted');
+      await clearLocalAppData();
+      return { ok: true };
+    }
+
+    if (res) {
+      lastStatus = res.status;
+      try {
+        lastBody = await res.text();
+      } catch {
+        lastBody = '';
+      }
+      console.log('[Auth0] deleteAccount failed', res.status, lastBody);
     }
 
     let serverMessage = '';
@@ -574,15 +609,27 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         serverMessage = lastBody.slice(0, 200);
       }
     }
+
+    if (lastStatus === 401 || lastStatus === 403) {
+      return {
+        ok: false,
+        error:
+          serverMessage ||
+          'Your session expired. Please sign out, sign back in, and try again.',
+      };
+    }
+
     const reason =
       serverMessage ||
-      (lastStatus === 404
-        ? 'Account deletion endpoint not found on server.'
-        : lastStatus === 0
-          ? 'Could not reach the server. Check your connection and try again.'
-          : `Server responded with status ${lastStatus}.`);
+      (networkError && !res
+        ? `Could not reach the server (${networkError}). Check your connection and try again.`
+        : lastStatus === 404
+          ? 'Account deletion endpoint not found on server.'
+          : lastStatus === 0
+            ? 'Could not reach the server. Check your connection and try again.'
+            : `Server responded with status ${lastStatus}.`);
     return { ok: false, error: reason };
-  }, [session, clearLocalAppData]);
+  }, [session, clearLocalAppData, refreshSession, persistSession]);
 
   const logout = useCallback(async () => {
     console.log('[Auth0] Logout initiated');
