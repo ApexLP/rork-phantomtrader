@@ -51,6 +51,7 @@ export default function SettingsScreen() {
   const { user, backendUser, isAuthenticated, logout, isAuthenticating, deleteAccount } = useAuth();
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [confirmVisible, setConfirmVisible] = useState<boolean>(false);
+  const [secondConfirmVisible, setSecondConfirmVisible] = useState<boolean>(false);
   const [successVisible, setSuccessVisible] = useState<boolean>(false);
   const firstName = getUserFirstName(backendUser, user);
   const userId = getUserId(backendUser, user);
@@ -78,6 +79,7 @@ export default function SettingsScreen() {
   const performDelete = useCallback(async () => {
     if (isDeleting) return;
     setConfirmVisible(false);
+    setSecondConfirmVisible(false);
     setIsDeleting(true);
     try {
       const result = await deleteAccount();
@@ -87,9 +89,6 @@ export default function SettingsScreen() {
       if (isSuccess) {
         console.log('[Settings] Delete success, status:', status);
         setSuccessVisible(true);
-        setTimeout(() => {
-          logout().catch((err) => console.log('[Settings] logout after delete error', err));
-        }, 1200);
         return;
       }
 
@@ -120,6 +119,15 @@ export default function SettingsScreen() {
     if (isDeleting) return;
     setConfirmVisible(true);
   }, [isDeleting]);
+
+  const handleFirstConfirm = useCallback(() => {
+    setConfirmVisible(false);
+    setTimeout(() => setSecondConfirmVisible(true), 200);
+  }, []);
+
+  const handleSecondCancel = useCallback(() => {
+    setSecondConfirmVisible(false);
+  }, []);
 
   const handleSuccessDismiss = useCallback(() => {
     setSuccessVisible(false);
@@ -340,11 +348,53 @@ export default function SettingsScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.modalBtnDestructive]}
-                onPress={performDelete}
+                onPress={handleFirstConfirm}
                 activeOpacity={0.85}
                 testID="delete-confirm-button"
               >
                 <Text style={styles.modalBtnDestructiveText}>Delete Account</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={secondConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleSecondCancel}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} testID="delete-second-confirm-modal">
+            <View style={styles.modalIconWrap}>
+              <Trash2 size={28} color={colors.negative} />
+            </View>
+            <Text style={styles.modalTitle}>Are you absolutely sure?</Text>
+            <Text style={styles.modalBody}>
+              This will permanently erase your account, portfolios, trades, and all related data. There is no way to recover it.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={handleSecondCancel}
+                activeOpacity={0.7}
+                testID="delete-second-cancel-button"
+              >
+                <Text style={styles.modalBtnCancelText}>Keep Account</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnDestructive]}
+                onPress={performDelete}
+                activeOpacity={0.85}
+                disabled={isDeleting}
+                testID="delete-second-confirm-button"
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalBtnDestructiveText}>Yes, Delete</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
